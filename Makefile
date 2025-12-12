@@ -1,11 +1,11 @@
 run:
-	uvicorn main:app --reload --port 8080
+	uv run uvicorn main:app --reload --port 8080
 
 lint:
-	ruff check
+	uv run ruff check
 
 lint-fix:
-	ruff check --fix
+	uv run ruff check --fix
 
 test:
-	pytest .
+	uv run pytest .
