@@ -1,5 +1,6 @@
 ### Hexlet tests and linter status:
 [![Actions Status](https://github.com/titanmen1/devops-engineer-from-scratch-project-313/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/titanmen1/devops-engineer-from-scratch-project-313/actions)
+[![CI](https://github.com/titanmen1/devops-engineer-from-scratch-project-313/actions/workflows/ci.yml/badge.svg)](https://github.com/titanmen1/devops-engineer-from-scratch-project-313/actions/workflows/ci.yml)
 
 
 ### Установка зависимостей
