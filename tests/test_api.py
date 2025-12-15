@@ -293,3 +293,28 @@ class TestingDeleteLinkAPI:
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
+
+
+class TestingRedirectAPI:
+    """Тесты для эндпоинта GET /r/{short_name}"""
+
+    async def test_redirect_success(self, test_client, mock_url_repository):
+        """Тест успешного редиректа"""
+        from app.models import URL
+
+        test_url = URL(id=1, original_url="https://example.com", short_name="example")
+        mock_url_repository.get_by_short_name.return_value = test_url
+
+        response = await test_client.get("/r/example", follow_redirects=False)
+
+        assert response.status_code == 307  # Temporary Redirect
+        assert response.headers["location"] == "https://example.com"
+
+    async def test_redirect_not_found(self, test_client, mock_url_repository):
+        """Тест редиректа с несуществующим short_name"""
+        mock_url_repository.get_by_short_name.return_value = None
+
+        response = await test_client.get("/r/nonexistent")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
