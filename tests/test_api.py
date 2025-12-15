@@ -28,6 +28,7 @@ class TestingGetLinksAPI:
         ]
 
         mock_url_repository.get_all.return_value = test_urls
+        mock_url_repository.get_total_count.return_value = 2
 
         response = await test_client.get("/api/links")
 
@@ -38,6 +39,79 @@ class TestingGetLinksAPI:
         assert data[0]["original_url"] == "https://example.com"
         assert data[1]["short_name"] == "google"
         assert data[1]["original_url"] == "https://google.com"
+
+    async def test_get_links_with_pagination(self, test_client, mock_url_repository):
+        """Тест получения списка ссылок с пагинацией"""
+
+        # Создаем 15 тестовых URL
+        test_urls = [
+            URL(id=i, original_url=f"https://example{i}.com", short_name=f"example{i}")
+            for i in range(1, 16)
+        ]
+
+        # Возвращаем первые 10 записей (индексы 0-9)
+        mock_url_repository.get_all.return_value = test_urls[:10]
+        mock_url_repository.get_total_count.return_value = 15
+
+        response = await test_client.get("/api/links?range=[0,10]")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 10
+
+        # Проверяем заголовок Content-Range
+        assert "Content-Range" in response.headers
+        assert response.headers["Content-Range"] == "links 0-9/15"
+
+        # Проверяем первую и последнюю запись
+        assert data[0]["id"] == 1
+        assert data[0]["short_name"] == "example1"
+        assert data[9]["id"] == 10
+        assert data[9]["short_name"] == "example10"
+
+    async def test_get_links_pagination_empty_range(
+        self, test_client, mock_url_repository
+    ):
+        """Тест пагинации с пустым диапазоном (за пределами данных)"""
+        from app.models import URL
+
+        # Возвращаем пустой список
+        mock_url_repository.get_all.return_value = []
+        mock_url_repository.get_total_count.return_value = 10
+
+        response = await test_client.get("/api/links?range=[20,30]")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 0
+
+        # Проверяем заголовок Content-Range для пустого результата
+        assert "Content-Range" in response.headers
+        assert response.headers["Content-Range"] == "links 20-20/10"
+
+    async def test_get_links_pagination_without_range(
+        self, test_client, mock_url_repository
+    ):
+        """Тест пагинации без указания range (должны использоваться значения по умолчанию)"""
+        from app.models import URL
+
+        test_urls = [
+            URL(id=i, original_url=f"https://example{i}.com", short_name=f"example{i}")
+            for i in range(1, 6)
+        ]
+
+        mock_url_repository.get_all.return_value = test_urls
+        mock_url_repository.get_total_count.return_value = 5
+
+        response = await test_client.get("/api/links")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 5
+
+        # Проверяем заголовок Content-Range
+        assert "Content-Range" in response.headers
+        assert response.headers["Content-Range"] == "links 0-4/5"
 
 
 class TestingGetLinkAPI:

@@ -29,3 +29,21 @@ class URLResponse(BaseModel):
             short_name=url.short_name,
             short_url=f"{BASE_URL}/r/{url.short_name}",
         )
+
+
+class PaginationParams(BaseModel):
+    """Параметры пагинации"""
+
+    offset: int = 0
+    limit: int = 10
+
+    @classmethod
+    def from_range(cls, range_str: str) -> "PaginationParams":
+        """Парсит строку range в формате [start,end]"""
+        try:
+            # Убираем квадратные скобки и разделяем по запятой
+            range_str = range_str.strip("[]")
+            start, end = map(int, range_str.split(","))
+            return cls(offset=start, limit=end - start)
+        except (ValueError, AttributeError):
+            return cls()
