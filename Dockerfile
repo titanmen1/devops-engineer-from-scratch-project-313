@@ -1,12 +1,11 @@
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
 # Установка nginx
 RUN apt-get update && \
-    apt-get install -y nginx && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y nginx
 
 # Установка uv для Python
 RUN pip install uv
@@ -22,12 +21,12 @@ COPY app ./app
 COPY ./frontend/dist /usr/share/nginx/html
 
 # Копирование конфигурации nginx
-COPY nginx.conf /etc/nginx/sites-available/default
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Копирование скрипта запуска
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-EXPOSE 80 8080
+EXPOSE 80
 
 CMD ["/start.sh"]
