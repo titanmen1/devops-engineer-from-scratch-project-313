@@ -19,7 +19,7 @@ RUN uv sync --no-dev
 COPY app ./app
 
 # Копирование фронтенда
-COPY node_modules/@hexlet/project-devops-deploy-crud-frontend/dist /usr/share/nginx/html
+COPY ./frontend/dist /usr/share/nginx/html
 
 # Копирование конфигурации nginx
 COPY nginx.conf /etc/nginx/sites-available/default
