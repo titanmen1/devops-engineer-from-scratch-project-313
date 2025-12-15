@@ -20,7 +20,6 @@ class TestingGetLinksAPI:
 
     async def test_get_links_with_data(self, test_client, mock_url_repository):
         """Тест получения списка ссылок с данными"""
-        from app.models import URL
 
         test_urls = [
             URL(id=1, original_url="https://example.com", short_name="example"),
@@ -73,7 +72,6 @@ class TestingGetLinksAPI:
         self, test_client, mock_url_repository
     ):
         """Тест пагинации с пустым диапазоном (за пределами данных)"""
-        from app.models import URL
 
         # Возвращаем пустой список
         mock_url_repository.get_all.return_value = []
@@ -93,7 +91,6 @@ class TestingGetLinksAPI:
         self, test_client, mock_url_repository
     ):
         """Тест пагинации без указания range (должны использоваться значения по умолчанию)"""
-        from app.models import URL
 
         test_urls = [
             URL(id=i, original_url=f"https://example{i}.com", short_name=f"example{i}")
@@ -119,7 +116,6 @@ class TestingGetLinkAPI:
 
     async def test_get_link_success(self, test_client, mock_url_repository):
         """Тест успешного получения ссылки по ID"""
-        from app.models import URL
 
         test_url = URL(id=1, original_url="https://example.com", short_name="example")
         mock_url_repository.get_by_id.return_value = test_url
@@ -194,7 +190,6 @@ class TestingUpdateLinkAPI:
 
     async def test_update_link_success(self, test_client, mock_url_repository):
         """Тест успешного обновления ссылки"""
-        from app.models import URL
 
         url_data = {"original_url": "https://updated.com", "short_name": "updated"}
 
@@ -232,7 +227,6 @@ class TestingUpdateLinkAPI:
         self, test_client, mock_url_repository
     ):
         """Тест обновления ссылки с уже существующим short_name"""
-        from app.models import URL
 
         url_data = {"original_url": "https://updated.com", "short_name": "google"}
 
@@ -251,7 +245,6 @@ class TestingUpdateLinkAPI:
 
     async def test_update_link_same_short_name(self, test_client, mock_url_repository):
         """Тест обновления ссылки с тем же short_name"""
-        from app.models import URL
 
         url_data = {"original_url": "https://updated.com", "short_name": "example"}
 
@@ -300,7 +293,6 @@ class TestingRedirectAPI:
 
     async def test_redirect_success(self, test_client, mock_url_repository):
         """Тест успешного редиректа"""
-        from app.models import URL
 
         test_url = URL(id=1, original_url="https://example.com", short_name="example")
         mock_url_repository.get_by_short_name.return_value = test_url
