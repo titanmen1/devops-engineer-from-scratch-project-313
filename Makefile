@@ -1,5 +1,5 @@
 run:
-	uv run uvicorn app.main:app --reload --port 8080
+	uv run uvicorn app.main:app --reload --port 8080 --host 0.0.0.0
 
 run-frontend:
 	npx start-hexlet-devops-deploy-crud-frontend
