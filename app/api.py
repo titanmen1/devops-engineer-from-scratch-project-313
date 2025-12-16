@@ -20,8 +20,8 @@ async def get_links(
     pagination = PaginationParams.from_range(range) if range else PaginationParams()
 
     # Получаем данные с пагинацией
-    urls = await repository.get_all(offset=pagination.offset, limit=pagination.limit)
-    total_count = await repository.get_total_count()
+    urls = repository.get_all(offset=pagination.offset, limit=pagination.limit)
+    total_count = repository.get_total_count()
 
     # Формируем заголовок Content-Range
     start = pagination.offset
@@ -44,7 +44,7 @@ async def get_link(
     link_id: int, repository: URLRepositoryProtocol = Depends(get_url_repository)
 ) -> URLResponse:
     """Получает данные ссылки по идентификатору"""
-    url = await repository.get_by_id(link_id)
+    url = repository.get_by_id(link_id)
     if not url:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -65,14 +65,14 @@ async def create_link(
             detail="Field 'short_name' is required",
         )
 
-    existing_url = await repository.get_by_short_name(url_data.short_name)
+    existing_url = repository.get_by_short_name(url_data.short_name)
     if existing_url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Short name '{url_data.short_name}' already exists",
         )
 
-    created_url = await repository.create(url_data)
+    created_url = repository.create(url_data)
     return URLResponse.from_url(created_url)
 
 
@@ -84,7 +84,7 @@ async def update_link(
 ) -> URLResponse:
     """Обновляет существующую ссылку"""
     # Проверяем существование ссылки
-    existing_url = await repository.get_by_id(link_id)
+    existing_url = repository.get_by_id(link_id)
     if not existing_url:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -92,14 +92,14 @@ async def update_link(
         )
 
     # Проверяем, не занято ли новое короткое имя другой ссылкой
-    url_with_same_short_name = await repository.get_by_short_name(url_data.short_name)
+    url_with_same_short_name = repository.get_by_short_name(url_data.short_name)
     if url_with_same_short_name and url_with_same_short_name.id != link_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Short name '{url_data.short_name}' already exists",
         )
 
-    updated_url = await repository.update(link_id, url_data)
+    updated_url = repository.update(link_id, url_data)
     return URLResponse.from_url(updated_url)
 
 
@@ -108,7 +108,7 @@ async def delete_link(
     link_id: int, repository: URLRepositoryProtocol = Depends(get_url_repository)
 ) -> None:
     """Удаляет ссылку"""
-    deleted = await repository.delete(link_id)
+    deleted = repository.delete(link_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

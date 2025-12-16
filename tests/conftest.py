@@ -17,5 +17,5 @@ async def test_client(mock_url_repository):
 
 @pytest.fixture
 def mock_url_repository(mocker):
-    mock = mocker.AsyncMock()
+    mock = mocker.Mock()
     return mock

@@ -13,7 +13,7 @@ from app.repository import URLRepositoryProtocol
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    await create_db_and_tables()
+    create_db_and_tables()
     yield
 
 
@@ -44,7 +44,7 @@ async def redirect_link(
     repository: URLRepositoryProtocol = Depends(get_url_repository),
 ) -> RedirectResponse:
     """Редирект по короткому имени ссылки"""
-    url = await repository.get_by_short_name(short_name)
+    url = repository.get_by_short_name(short_name)
     if url is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

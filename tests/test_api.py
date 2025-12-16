@@ -11,8 +11,10 @@ class TestingPingAPI:
 class TestingGetLinksAPI:
     """Тесты для эндпоинта GET /links"""
 
-    async def test_get_links_empty_list(self, test_client):
+    async def test_get_links_empty_list(self, test_client, mock_url_repository):
         """Тест получения пустого списка ссылок"""
+        mock_url_repository.get_all.return_value = []
+
         response = await test_client.get("/api/links")
 
         assert response.status_code == 200
