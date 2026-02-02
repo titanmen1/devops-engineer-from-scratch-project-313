@@ -12,3 +12,4 @@ echo "Starting nginx on port $PORT..."
 
 # Запускаем nginx на переднем плане
 exec nginx -g "daemon off;"
+
