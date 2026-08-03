@@ -24,15 +24,13 @@ make install-frontend
 make run
 ```
 
-Фронтенд (dev-сервер с проксированием запросов на бэкенд):
+Фронтенд (готовая сборка из npm-пакета
+`@hexlet/project-devops-deploy-crud-frontend`, в репозитории не хранится):
 ```bash
 make run-frontend
 ```
 
-Сборка фронтенда в `frontend/dist` (в репозитории не хранится, собирается при билде):
-```bash
-make build-frontend
-```
+При сборке образа фронтенд подтягивается тем же пакетом и раздаётся через nginx.
 
 
 ### Тесты

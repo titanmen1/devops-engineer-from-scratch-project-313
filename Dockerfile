@@ -1,13 +1,10 @@
-# Сборка фронтенда
+# Загрузка собранного фронтенда из npm-пакета
 FROM node:22-alpine AS frontend
 
 WORKDIR /frontend
 
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-
-COPY frontend ./
-RUN npm run build
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 
 FROM python:3.14-slim
@@ -29,8 +26,10 @@ RUN uv sync --no-dev
 # Копирование backend кода
 COPY app ./app
 
-# Копирование собранного фронтенда
-COPY --from=frontend /frontend/dist /usr/share/nginx/html
+# Копирование фронтенда
+COPY --from=frontend \
+    /frontend/node_modules/@hexlet/project-devops-deploy-crud-frontend/dist \
+    /usr/share/nginx/html
 
 # Копирование конфигурации nginx
 COPY nginx.conf /etc/nginx/nginx.conf

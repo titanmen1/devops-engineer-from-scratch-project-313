@@ -2,13 +2,10 @@ run:
 	uv run uvicorn app.main:app --reload --port 8080 --host 0.0.0.0
 
 install-frontend:
-	npm ci --prefix frontend
-
-build-frontend:
-	npm run build --prefix frontend
+	npm ci
 
 run-frontend:
-	npm run dev --prefix frontend
+	npx start-hexlet-devops-deploy-crud-frontend
 
 dev:
 	npx concurrently "make run" "make run-frontend"
