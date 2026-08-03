@@ -1,314 +1,218 @@
+from collections.abc import Callable
+
+from httpx import AsyncClient
+from sqlmodel import Session
+
 from app.models import URL
 
+UNKNOWN_LINK_ID = 999999
 
-class TestingPingAPI:
-    async def test_ping_api(self, test_client):
-        response = await test_client.get("/ping")
+
+class TestPing:
+    """Проверка доступности приложения"""
+
+    async def test_answers_pong(self, client: AsyncClient) -> None:
+        response = await client.get("/ping")
+
         assert response.status_code == 200
         assert response.json() == "pong"
 
 
-class TestingGetLinksAPI:
-    """Тесты для эндпоинта GET /links"""
+class TestLinks:
+    """Ресурс /api/links"""
+
+    class TestList:
+        async def test_returns_empty_list_without_links(
+            self, client: AsyncClient
+        ) -> None:
+            response = await client.get("/api/links")
+
+            assert response.status_code == 200
+            assert response.json() == []
+            assert response.headers["Content-Range"] == "links 0--1/0"
+
+        async def test_returns_saved_links(
+            self, client: AsyncClient, links: list[URL]
+        ) -> None:
+            response = await client.get("/api/links")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert {item["short_name"] for item in data} == {
+                link.short_name for link in links
+            }
+            assert response.headers["Content-Range"] == "links 0-2/3"
+
+        async def test_returns_page_from_range(
+            self, client: AsyncClient, many_links: list[URL]
+        ) -> None:
+            response = await client.get("/api/links?range=[0,10]")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 10
+            assert {item["id"] for item in data} <= {link.id for link in many_links}
+            assert response.headers["Content-Range"] == "links 0-9/15"
+
+        async def test_returns_empty_page_beyond_data(
+            self, client: AsyncClient, many_links: list[URL]
+        ) -> None:
+            response = await client.get("/api/links?range=[20,30]")
+
+            assert response.status_code == 200
+            assert response.json() == []
+            assert response.headers["Content-Range"] == "links 20-20/15"
+
+        async def test_limits_page_size_without_range(
+            self, client: AsyncClient, many_links: list[URL]
+        ) -> None:
+            response = await client.get("/api/links")
+
+            assert response.status_code == 200
+            assert len(response.json()) == 10
+            assert response.headers["Content-Range"] == "links 0-9/15"
+
+    class TestDetail:
+        async def test_returns_link_by_id(self, client: AsyncClient, link: URL) -> None:
+            response = await client.get(f"/api/links/{link.id}")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["id"] == link.id
+            assert data["original_url"] == link.original_url
+            assert data["short_name"] == link.short_name
+            assert data["short_url"].endswith(f"/r/{link.short_name}")
+
+        async def test_returns_404_for_unknown_link(self, client: AsyncClient) -> None:
+            response = await client.get(f"/api/links/{UNKNOWN_LINK_ID}")
+
+            assert response.status_code == 404
+            assert "not found" in response.json()["detail"]
+
+    class TestCreate:
+        async def test_saves_link(
+            self, client: AsyncClient, db_session: Session
+        ) -> None:
+            payload = {"original_url": "https://example.com", "short_name": "example"}
+
+            response = await client.post("/api/links", json=payload)
+
+            assert response.status_code == 201
+            data = response.json()
+            assert data["original_url"] == payload["original_url"]
+            assert data["short_name"] == payload["short_name"]
+
+            created = db_session.get(URL, data["id"])
+            assert created is not None
+            assert created.original_url == payload["original_url"]
+            assert created.short_name == payload["short_name"]
+
+        async def test_requires_short_name(self, client: AsyncClient) -> None:
+            payload = {"original_url": "https://example.com", "short_name": ""}
+
+            response = await client.post("/api/links", json=payload)
+
+            assert response.status_code == 400
+            assert "short_name" in response.json()["detail"]
+
+        async def test_rejects_duplicate_short_name(
+            self, client: AsyncClient, link: URL
+        ) -> None:
+            payload = {"original_url": "https://other.com", "short_name": "example"}
 
-    async def test_get_links_empty_list(self, test_client, mock_url_repository):
-        """Тест получения пустого списка ссылок"""
-        mock_url_repository.get_all.return_value = []
+            response = await client.post("/api/links", json=payload)
 
-        response = await test_client.get("/api/links")
+            assert response.status_code == 400
+            assert "already exists" in response.json()["detail"]
 
-        assert response.status_code == 200
-        assert response.json() == []
+    class TestUpdate:
+        async def test_saves_changes(
+            self, client: AsyncClient, db_session: Session, link: URL
+        ) -> None:
+            payload = {"original_url": "https://updated.com", "short_name": "updated"}
 
-    async def test_get_links_with_data(self, test_client, mock_url_repository):
-        """Тест получения списка ссылок с данными"""
+            response = await client.put(f"/api/links/{link.id}", json=payload)
 
-        test_urls = [
-            URL(id=1, original_url="https://example.com", short_name="example"),
-            URL(id=2, original_url="https://google.com", short_name="google"),
-        ]
+            assert response.status_code == 200
+            data = response.json()
+            assert data["original_url"] == payload["original_url"]
+            assert data["short_name"] == payload["short_name"]
 
-        mock_url_repository.get_all.return_value = test_urls
-        mock_url_repository.get_total_count.return_value = 2
+            db_session.refresh(link)
+            assert link.original_url == payload["original_url"]
+            assert link.short_name == payload["short_name"]
 
-        response = await test_client.get("/api/links")
+        async def test_returns_404_for_unknown_link(self, client: AsyncClient) -> None:
+            payload = {"original_url": "https://updated.com", "short_name": "updated"}
 
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
-        assert data[0]["short_name"] == "example"
-        assert data[0]["original_url"] == "https://example.com"
-        assert data[1]["short_name"] == "google"
-        assert data[1]["original_url"] == "https://google.com"
+            response = await client.put(f"/api/links/{UNKNOWN_LINK_ID}", json=payload)
 
-    async def test_get_links_with_pagination(self, test_client, mock_url_repository):
-        """Тест получения списка ссылок с пагинацией"""
+            assert response.status_code == 404
+            assert "not found" in response.json()["detail"]
 
-        # Создаем 15 тестовых URL
-        test_urls = [
-            URL(id=i, original_url=f"https://example{i}.com", short_name=f"example{i}")
-            for i in range(1, 16)
-        ]
+        async def test_rejects_short_name_of_another_link(
+            self, client: AsyncClient, link: URL, create_link: Callable[..., URL]
+        ) -> None:
+            other_link = create_link(
+                original_url="https://google.com", short_name="google"
+            )
+            payload = {
+                "original_url": "https://updated.com",
+                "short_name": other_link.short_name,
+            }
 
-        # Возвращаем первые 10 записей (индексы 0-9)
-        mock_url_repository.get_all.return_value = test_urls[:10]
-        mock_url_repository.get_total_count.return_value = 15
+            response = await client.put(f"/api/links/{link.id}", json=payload)
 
-        response = await test_client.get("/api/links?range=[0,10]")
+            assert response.status_code == 400
+            assert "already exists" in response.json()["detail"]
 
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 10
+        async def test_keeps_own_short_name(
+            self, client: AsyncClient, link: URL
+        ) -> None:
+            payload = {
+                "original_url": "https://updated.com",
+                "short_name": link.short_name,
+            }
 
-        # Проверяем заголовок Content-Range
-        assert "Content-Range" in response.headers
-        assert response.headers["Content-Range"] == "links 0-9/15"
+            response = await client.put(f"/api/links/{link.id}", json=payload)
 
-        # Проверяем первую и последнюю запись
-        assert data[0]["id"] == 1
-        assert data[0]["short_name"] == "example1"
-        assert data[9]["id"] == 10
-        assert data[9]["short_name"] == "example10"
+            assert response.status_code == 200
+            assert response.json()["short_name"] == link.short_name
 
-    async def test_get_links_pagination_empty_range(
-        self, test_client, mock_url_repository
-    ):
-        """Тест пагинации с пустым диапазоном (за пределами данных)"""
+    class TestDelete:
+        async def test_removes_link(
+            self, client: AsyncClient, db_session: Session, link: URL
+        ) -> None:
+            link_id = link.id
 
-        # Возвращаем пустой список
-        mock_url_repository.get_all.return_value = []
-        mock_url_repository.get_total_count.return_value = 10
+            response = await client.delete(f"/api/links/{link_id}")
 
-        response = await test_client.get("/api/links?range=[20,30]")
+            assert response.status_code == 204
+            assert response.content == b""
+            assert db_session.get(URL, link_id) is None
 
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 0
+        async def test_returns_404_for_unknown_link(self, client: AsyncClient) -> None:
+            response = await client.delete(f"/api/links/{UNKNOWN_LINK_ID}")
 
-        # Проверяем заголовок Content-Range для пустого результата
-        assert "Content-Range" in response.headers
-        assert response.headers["Content-Range"] == "links 20-20/10"
+            assert response.status_code == 404
+            assert "not found" in response.json()["detail"]
 
-    async def test_get_links_pagination_without_range(
-        self, test_client, mock_url_repository
-    ):
-        """Тест пагинации без указания range (должны использоваться значения по умолчанию)"""
 
-        test_urls = [
-            URL(id=i, original_url=f"https://example{i}.com", short_name=f"example{i}")
-            for i in range(1, 6)
-        ]
+class TestRedirect:
+    """Ресурс /r/{short_name}"""
 
-        mock_url_repository.get_all.return_value = test_urls
-        mock_url_repository.get_total_count.return_value = 5
+    async def test_redirects_to_original_url(
+        self, client: AsyncClient, link: URL
+    ) -> None:
+        response = await client.get(f"/r/{link.short_name}", follow_redirects=False)
 
-        response = await test_client.get("/api/links")
+        assert response.status_code == 307
+        assert response.headers["location"] == link.original_url
 
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 5
-
-        # Проверяем заголовок Content-Range
-        assert "Content-Range" in response.headers
-        assert response.headers["Content-Range"] == "links 0-4/5"
-
-
-class TestingGetLinkAPI:
-    """Тесты для эндпоинта GET /links/{link_id}"""
-
-    async def test_get_link_success(self, test_client, mock_url_repository):
-        """Тест успешного получения ссылки по ID"""
-
-        test_url = URL(id=1, original_url="https://example.com", short_name="example")
-        mock_url_repository.get_by_id.return_value = test_url
-
-        response = await test_client.get("/api/links/1")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["id"] == 1
-        assert data["short_name"] == "example"
-        assert data["original_url"] == "https://example.com"
-
-    async def test_get_link_not_found(self, test_client, mock_url_repository):
-        """Тест получения несуществующей ссылки"""
-        mock_url_repository.get_by_id.return_value = None
-
-        response = await test_client.get("/api/links/999")
-
-        assert response.status_code == 404
-        assert "not found" in response.json()["detail"]
-
-
-class TestingCreateLinkAPI:
-    """Тесты для эндпоинта POST /links"""
-
-    async def test_create_link_success(self, test_client, mock_url_repository):
-        """Тест успешного создания ссылки"""
-
-        url_data = {"original_url": "https://example.com", "short_name": "example"}
-
-        created_url = URL(
-            id=1, original_url="https://example.com", short_name="example"
-        )
-        mock_url_repository.get_by_short_name.return_value = None
-        mock_url_repository.create.return_value = created_url
-
-        response = await test_client.post("/api/links", json=url_data)
-
-        assert response.status_code == 201
-        data = response.json()
-        assert data["id"] == 1
-        assert data["short_name"] == "example"
-        assert data["original_url"] == "https://example.com"
-
-    async def test_create_link_missing_short_name(self, test_client):
-        """Тест создания ссылки без short_name"""
-        url_data = {"original_url": "https://example.com", "short_name": ""}
-
-        response = await test_client.post("/api/links", json=url_data)
-
-        assert response.status_code == 400
-        assert "short_name" in response.json()["detail"]
-
-    async def test_create_link_duplicate_short_name(
-        self, test_client, mock_url_repository
-    ):
-        """Тест создания ссылки с уже существующим short_name"""
-
-        url_data = {"original_url": "https://example.com", "short_name": "example"}
-
-        existing_url = URL(id=1, original_url="https://other.com", short_name="example")
-        mock_url_repository.get_by_short_name.return_value = existing_url
-
-        response = await test_client.post("/api/links", json=url_data)
-
-        assert response.status_code == 400
-        assert "already exists" in response.json()["detail"]
-
-
-class TestingUpdateLinkAPI:
-    """Тесты для эндпоинта PUT /links/{link_id}"""
-
-    async def test_update_link_success(self, test_client, mock_url_repository):
-        """Тест успешного обновления ссылки"""
-
-        url_data = {"original_url": "https://updated.com", "short_name": "updated"}
-
-        existing_url = URL(
-            id=1, original_url="https://example.com", short_name="example"
-        )
-        updated_url = URL(
-            id=1, original_url="https://updated.com", short_name="updated"
-        )
-
-        mock_url_repository.get_by_id.return_value = existing_url
-        mock_url_repository.get_by_short_name.return_value = None
-        mock_url_repository.update.return_value = updated_url
-
-        response = await test_client.put("/api/links/1", json=url_data)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["id"] == 1
-        assert data["short_name"] == "updated"
-        assert data["original_url"] == "https://updated.com"
-
-    async def test_update_link_not_found(self, test_client, mock_url_repository):
-        """Тест обновления несуществующей ссылки"""
-        url_data = {"original_url": "https://updated.com", "short_name": "updated"}
-
-        mock_url_repository.get_by_id.return_value = None
-
-        response = await test_client.put("/api/links/999", json=url_data)
-
-        assert response.status_code == 404
-        assert "not found" in response.json()["detail"]
-
-    async def test_update_link_duplicate_short_name(
-        self, test_client, mock_url_repository
-    ):
-        """Тест обновления ссылки с уже существующим short_name"""
-
-        url_data = {"original_url": "https://updated.com", "short_name": "google"}
-
-        existing_url = URL(
-            id=1, original_url="https://example.com", short_name="example"
-        )
-        other_url = URL(id=2, original_url="https://google.com", short_name="google")
-
-        mock_url_repository.get_by_id.return_value = existing_url
-        mock_url_repository.get_by_short_name.return_value = other_url
-
-        response = await test_client.put("/api/links/1", json=url_data)
-
-        assert response.status_code == 400
-        assert "already exists" in response.json()["detail"]
-
-    async def test_update_link_same_short_name(self, test_client, mock_url_repository):
-        """Тест обновления ссылки с тем же short_name"""
-
-        url_data = {"original_url": "https://updated.com", "short_name": "example"}
-
-        existing_url = URL(
-            id=1, original_url="https://example.com", short_name="example"
-        )
-        updated_url = URL(
-            id=1, original_url="https://updated.com", short_name="example"
-        )
-
-        mock_url_repository.get_by_id.return_value = existing_url
-        mock_url_repository.get_by_short_name.return_value = existing_url
-        mock_url_repository.update.return_value = updated_url
-
-        response = await test_client.put("/api/links/1", json=url_data)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["short_name"] == "example"
-
-
-class TestingDeleteLinkAPI:
-    """Тесты для эндпоинта DELETE /links/{link_id}"""
-
-    async def test_delete_link_success(self, test_client, mock_url_repository):
-        """Тест успешного удаления ссылки"""
-        mock_url_repository.delete.return_value = True
-
-        response = await test_client.delete("/api/links/1")
-
-        assert response.status_code == 204
-        assert response.content == b""
-
-    async def test_delete_link_not_found(self, test_client, mock_url_repository):
-        """Тест удаления несуществующей ссылки"""
-        mock_url_repository.delete.return_value = False
-
-        response = await test_client.delete("/api/links/999")
-
-        assert response.status_code == 404
-        assert "not found" in response.json()["detail"]
-
-
-class TestingRedirectAPI:
-    """Тесты для эндпоинта GET /r/{short_name}"""
-
-    async def test_redirect_success(self, test_client, mock_url_repository):
-        """Тест успешного редиректа"""
-
-        test_url = URL(id=1, original_url="https://example.com", short_name="example")
-        mock_url_repository.get_by_short_name.return_value = test_url
-
-        response = await test_client.get("/r/example", follow_redirects=False)
-
-        assert response.status_code == 307  # Temporary Redirect
-        assert response.headers["location"] == "https://example.com"
-
-    async def test_redirect_not_found(self, test_client, mock_url_repository):
-        """Тест редиректа с несуществующим short_name"""
-        mock_url_repository.get_by_short_name.return_value = None
-
-        response = await test_client.get("/r/nonexistent")
+    async def test_returns_404_for_unknown_short_name(
+        self, client: AsyncClient
+    ) -> None:
+        response = await client.get("/r/nonexistent")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]

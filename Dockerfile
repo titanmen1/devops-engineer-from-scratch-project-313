@@ -1,3 +1,14 @@
+# Сборка фронтенда
+FROM node:22-alpine AS frontend
+
+WORKDIR /frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend ./
+RUN npm run build
+
 
 FROM python:3.14-slim
 
@@ -5,7 +16,8 @@ WORKDIR /app
 
 # Установка nginx
 RUN apt-get update && \
-    apt-get install -y nginx
+    apt-get install -y --no-install-recommends nginx && \
+    rm -rf /var/lib/apt/lists/*
 
 # Установка uv для Python
 RUN pip install uv
@@ -17,8 +29,8 @@ RUN uv sync --no-dev
 # Копирование backend кода
 COPY app ./app
 
-# Копирование фронтенда
-COPY ./frontend/dist /usr/share/nginx/html
+# Копирование собранного фронтенда
+COPY --from=frontend /frontend/dist /usr/share/nginx/html
 
 # Копирование конфигурации nginx
 COPY nginx.conf /etc/nginx/nginx.conf
